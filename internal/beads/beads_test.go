@@ -3407,3 +3407,46 @@ func TestResolveBdSubprocessTimeout(t *testing.T) {
 		})
 	}
 }
+
+// TestRunSubprocessTimeoutDistinguishedFromSIGKILL verifies that when the
+// context deadline fires, the wrapped error explicitly says "timed out"
+// rather than the bare "signal: killed" string that an external SIGKILL
+// (e.g. Jetsam under memory pressure) would produce.
+func TestRunSubprocessTimeoutDistinguishedFromSIGKILL(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell-script bd stub not portable to Windows")
+	}
+
+	stubDir := t.TempDir()
+	// Fake bd that sleeps far longer than the timeout we set below.
+	// `exec` replaces the shell with sleep so that SIGKILL to the leader
+	// process actually kills the sleeping child (otherwise cmd.Wait blocks
+	// waiting for the inherited stdout/stderr pipes to drain).
+	stubScript := "#!/bin/sh\nexec sleep 30\n"
+	stubPath := filepath.Join(stubDir, "bd")
+	if err := os.WriteFile(stubPath, []byte(stubScript), 0755); err != nil {
+		t.Fatalf("write bd stub: %v", err)
+	}
+
+	origPath := os.Getenv("PATH")
+	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+origPath)
+	t.Setenv("GT_BD_TIMEOUT_SEC", "1")
+
+	workDir := t.TempDir()
+	b := New(workDir)
+
+	start := time.Now()
+	_, err := b.run("list", "--json")
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("expected timeout error, got nil")
+	}
+	if !strings.Contains(err.Error(), "timed out") {
+		t.Errorf("error should mention 'timed out', got: %v", err)
+	}
+	// Sanity: should fail near the 1s deadline, not after the stub's 30s sleep.
+	if elapsed > 10*time.Second {
+		t.Errorf("timeout took too long (%v); expected ~1s", elapsed)
+	}
+}

@@ -110,6 +110,9 @@ func (c *StaleAgentBeadsCheck) Run(ctx *CheckContext) *CheckResult {
 			// Agent bead ID patterns:
 			// Crew:    prefix-rig-crew-name (or prefix-crew-name when prefix == rig)
 			// Polecat: prefix-rig-polecat-name (or prefix-polecat-name when prefix == rig)
+			//
+			// Use AgentBeadIDWithPrefix to get the correct prefix, handling the
+			// collapsed form when prefix == rigName (GH#1877).
 			crewPrefix := beads.AgentBeadIDWithPrefix(prefix, rigName, constants.RoleCrew, "") + "-"
 			polecatPrefix := beads.AgentBeadIDWithPrefix(prefix, rigName, constants.RolePolecat, "") + "-"
 			allBeads, err := bd.List(beads.ListOptions{

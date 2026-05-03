@@ -521,6 +521,12 @@ func (b *Beads) run(args ...string) (_ []byte, retErr error) {
 		err = cmd.Run()
 	}
 
+	// Distinguish our own context timeout from a process SIGKILL (e.g. Jetsam
+	// under memory pressure). Both surface as "signal: killed" otherwise.
+	if err != nil && ctx.Err() == context.DeadlineExceeded {
+		err = fmt.Errorf("bd subprocess timed out after %s: %w", resolveBdSubprocessTimeout(), err)
+	}
+
 	if err != nil {
 		return nil, b.wrapError(err, stderr.String(), args)
 	}
@@ -564,6 +570,9 @@ func (b *Beads) runWithRouting(args ...string) (_ []byte, retErr error) { //noli
 	cmd.Stderr = &stderr
 
 	err := cmd.Run()
+	if err != nil && ctx.Err() == context.DeadlineExceeded {
+		err = fmt.Errorf("bd subprocess timed out after %s: %w", resolveBdSubprocessTimeout(), err)
+	}
 	if err != nil {
 		return nil, b.wrapError(err, stderr.String(), args)
 	}
