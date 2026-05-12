@@ -53,7 +53,7 @@ const (
 	// NudgeModeQueue writes to a file queue; agent picks up via hook at next
 	// turn boundary. Zero interruption but delivery depends on agent turn frequency.
 	NudgeModeQueue = "queue"
-	// NudgeModeWaitIdle waits for the agent to become idle (prompt visible),
+	// NudgeModeWaitIdle waits for the agent to become idle (empty prompt visible),
 	// then delivers directly. Falls back to queue on timeout. Best of both worlds.
 	NudgeModeWaitIdle = "wait-idle"
 )
@@ -79,7 +79,7 @@ Delivers a message to any worker's Claude Code session: polecats, crew,
 witness, refinery, mayor, or deacon.
 
 Delivery modes (--mode):
-  wait-idle  Wait for agent to become idle (prompt visible), then deliver
+  wait-idle  Wait for agent to become idle (empty prompt visible), then deliver
              directly. Falls back to queue on timeout. If both idle-wait and
              queue fail, falls back to immediate delivery as a last resort.
              This is the default — it avoids interrupting active tool calls.

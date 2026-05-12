@@ -2861,6 +2861,19 @@ func matchesPromptPrefix(line, readyPromptPrefix string) bool {
 	return strings.HasPrefix(trimmed, normalizedPrefix) || (prefix != "" && trimmed == prefix)
 }
 
+// matchesEmptyPrompt reports whether a captured line is the ready prompt with
+// no typed input after it. A visible prompt with trailing text means an operator
+// may be editing a message; direct nudge injection would corrupt that input.
+func matchesEmptyPrompt(line, readyPromptPrefix string) bool {
+	if readyPromptPrefix == "" {
+		return false
+	}
+	trimmed := strings.TrimSpace(line)
+	trimmed = strings.ReplaceAll(trimmed, "\u00a0", " ")
+	prefix := strings.TrimSpace(strings.ReplaceAll(readyPromptPrefix, "\u00a0", " "))
+	return prefix != "" && trimmed == prefix
+}
+
 func hasBusyIndicator(line string) bool {
 	trimmed := strings.TrimSpace(line)
 	if trimmed == "" {
@@ -2931,7 +2944,6 @@ const DefaultReadyPromptPrefix = "❯ "
 // Returns an error if the timeout expires while the agent is still busy.
 func (t *Tmux) WaitForIdle(session string, timeout time.Duration) error {
 	promptPrefix := readyPromptPrefixForSession(t, session)
-	prefix := strings.TrimSpace(promptPrefix)
 
 	// Require 2 consecutive idle polls to filter out transient states.
 	// During inter-tool-call gaps (~500ms), the prompt may briefly appear
@@ -2971,16 +2983,16 @@ func (t *Tmux) WaitForIdle(session string, timeout time.Duration) error {
 			continue
 		}
 
-		// Scan all captured lines for the prompt prefix.
-		// Claude Code renders a status bar below the prompt line,
-		// so the prompt may not be the last non-empty line.
+		// Scan all captured lines for an empty prompt. Claude Code renders a
+		// status bar below the prompt line, so the prompt may not be the last
+		// non-empty line. A prompt with text after it is not safe for direct
+		// nudge delivery because an overseer may be typing there. (GH #1216)
 		promptFound := false
 		for _, line := range lines {
-			trimmed := strings.TrimSpace(line)
-			if trimmed == "" {
+			if strings.TrimSpace(line) == "" {
 				continue
 			}
-			if matchesPromptPrefix(trimmed, promptPrefix) || (prefix != "" && trimmed == prefix) {
+			if matchesEmptyPrompt(line, promptPrefix) {
 				promptFound = true
 				break
 			}

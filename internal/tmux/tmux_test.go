@@ -1834,6 +1834,41 @@ func TestMatchesPromptPrefix(t *testing.T) {
 	}
 }
 
+func TestMatchesEmptyPrompt(t *testing.T) {
+	t.Parallel()
+	const (
+		nbsp          = "\u00a0"
+		regularPrefix = "❯ "
+	)
+
+	tests := []struct {
+		name   string
+		line   string
+		prefix string
+		want   bool
+	}{
+		{"regular empty prompt", "❯ ", regularPrefix, true},
+		{"bare prompt", "❯", regularPrefix, true},
+		{"NBSP empty prompt", "❯" + nbsp, regularPrefix, true},
+		{"leading whitespace", "  ❯" + nbsp, regularPrefix, true},
+		{"typed input", "❯ some input", regularPrefix, false},
+		{"NBSP typed input", "❯" + nbsp + "some input", regularPrefix, false},
+		{"empty prefix", "❯ ", "", false},
+		{"no prompt", "hello world", regularPrefix, false},
+		{"empty line", "", regularPrefix, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := matchesEmptyPrompt(tt.line, tt.prefix)
+			if got != tt.want {
+				t.Errorf("matchesEmptyPrompt(%q, %q) = %v, want %v",
+					tt.line, tt.prefix, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestWaitForIdle_Timeout(t *testing.T) {
 	if os.Getenv("TMUX") == "" {
 		t.Skip("not inside tmux")
