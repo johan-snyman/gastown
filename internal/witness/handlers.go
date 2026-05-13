@@ -1287,8 +1287,23 @@ func detectZombieLiveSession(bd *BdCli, workDir, townRoot, rigName, polecatName,
 				}
 				return zombie, true
 
-			case polecat.HeartbeatWorking, polecat.HeartbeatIdle:
-				// Fresh heartbeat, healthy state — not a zombie.
+			case polecat.HeartbeatWorking:
+				// Fresh heartbeat, agent actively working — not a zombie.
+				return ZombieResult{}, false
+
+			case polecat.HeartbeatIdle:
+				// Fresh heartbeat, agent idle. If a hook bead was attached >5min ago
+				// and the agent is still idle, it missed its wake-up signal — nudge it
+				// so it starts working without requiring human intervention. (gt-51y)
+				if snapHook != "" {
+					const idleHookNudgeGrace = 5 * time.Minute
+					attachedAt := getBeadAttachedAt(bd, workDir, snapHook)
+					if !attachedAt.IsZero() && time.Since(attachedAt) > idleHookNudgeGrace {
+						sessionID := session.PolecatSessionName(session.PrefixFor(rigName), polecatName)
+						nudgeMsg := fmt.Sprintf("%s is on your hook. Run gt prime then proceed.", snapHook)
+						_ = t.NudgeSession(sessionID, nudgeMsg)
+					}
+				}
 				return ZombieResult{}, false
 			}
 		}
@@ -2247,6 +2262,34 @@ func getBeadStatus(bd *BdCli, workDir, beadID string) (string, bool) {
 		return "", true
 	}
 	return issues[0].Status, true
+}
+
+// getBeadAttachedAt returns the attached_at timestamp from a bead's description.
+// Returns zero time if the bead cannot be fetched or has no attached_at field.
+// Used by detectZombieLiveSession to detect idle polecats with stale hooks (gt-51y).
+func getBeadAttachedAt(bd *BdCli, workDir, beadID string) time.Time {
+	if beadID == "" {
+		return time.Time{}
+	}
+	output, err := bd.Exec(workDir, "show", beadID, "--json")
+	if err != nil || output == "" {
+		return time.Time{}
+	}
+	var issues []struct {
+		Description string `json:"description"`
+	}
+	if err := json.Unmarshal([]byte(output), &issues); err != nil || len(issues) == 0 {
+		return time.Time{}
+	}
+	fields := beads.ParseAttachmentFields(&beads.Issue{Description: issues[0].Description})
+	if fields == nil || fields.AttachedAt == "" {
+		return time.Time{}
+	}
+	t, err := time.Parse(time.RFC3339, fields.AttachedAt)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
 }
 
 // resetAbandonedBead resets a dead polecat's hooked bead so it can be re-dispatched.

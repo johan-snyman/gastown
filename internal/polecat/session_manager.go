@@ -618,6 +618,29 @@ func (m *SessionManager) Start(polecat string, opts SessionStartOptions) error {
 	return nil
 }
 
+// WakeExistingSession hooks an issue to an already-running polecat session and sends
+// a nudge to start work. Called when gt session start is invoked on a polecat that
+// already has an active session (ErrSessionRunning path). (gt-51y)
+func (m *SessionManager) WakeExistingSession(polecatName, issueID string) error {
+	sessionID := m.SessionName(polecatName)
+	workDir := m.clonePath(polecatName)
+
+	if issueID != "" {
+		agentID := fmt.Sprintf("%s/polecats/%s", m.rig.Name, polecatName)
+		if err := m.hookIssue(issueID, agentID, workDir); err != nil {
+			style.PrintWarning("could not hook issue %s to %s: %v", issueID, polecatName, err)
+		}
+	}
+
+	var msg string
+	if issueID != "" {
+		msg = fmt.Sprintf("%s is on your hook. Run gt prime then proceed.", issueID)
+	} else {
+		msg = "Run gt prime and begin work."
+	}
+	return m.tmux.NudgeSession(sessionID, msg)
+}
+
 // isSessionStale checks if a tmux session's pane process has died.
 // A stale session exists in tmux but its main process (the agent) is no longer running.
 // This happens when the agent crashes during startup but tmux keeps the dead pane.
