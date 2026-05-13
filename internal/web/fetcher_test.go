@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -682,6 +683,29 @@ printf 'coalesced output'
 	}
 	if got := len(count); got != 1 {
 		t.Fatalf("bd executions = %d, want 1", got)
+	}
+}
+
+func TestAcquireBdSlot_TimesOutWhenConcurrencyLimitReached(t *testing.T) {
+	f := &LiveConvoyFetcher{
+		cmdTimeout:    25 * time.Millisecond,
+		bdConcurrency: make(chan struct{}, 1),
+	}
+
+	release, err := f.acquireBdSlot(context.Background())
+	if err != nil {
+		t.Fatalf("first acquireBdSlot: %v", err)
+	}
+	defer release()
+
+	ctx, cancel := context.WithTimeout(context.Background(), f.cmdTimeout)
+	defer cancel()
+	_, err = f.acquireBdSlot(ctx)
+	if err == nil {
+		t.Fatal("expected timeout acquiring saturated bd slot")
+	}
+	if !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("expected timeout error, got: %v", err)
 	}
 }
 
