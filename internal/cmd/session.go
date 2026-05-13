@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -272,6 +273,20 @@ func runSessionStart(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Starting session for %s/%s...\n", rigName, polecatName)
 	if err := polecatMgr.Start(polecatName, opts); err != nil {
+		// Session already running with a live agent (gt-51y): hook the issue and
+		// send a nudge instead of failing. This handles the case where gt session
+		// start is called on an idle polecat that didn't receive its wake-up signal.
+		if errors.Is(err, polecat.ErrSessionRunning) {
+			fmt.Printf("%s Session already running for %s/%s\n", style.Dim.Render("○"), rigName, polecatName)
+			if wakeErr := polecatMgr.WakeExistingSession(polecatName, sessionIssue); wakeErr != nil {
+				fmt.Printf("%s Could not nudge session: %v\n", style.Dim.Render("Warning:"), wakeErr)
+			} else if sessionIssue != "" {
+				fmt.Printf("%s Nudged %s/%s: %s is on your hook\n", style.Bold.Render("✓"), rigName, polecatName, sessionIssue)
+			} else {
+				fmt.Printf("%s Nudged %s/%s\n", style.Bold.Render("✓"), rigName, polecatName)
+			}
+			return nil
+		}
 		return fmt.Errorf("starting session: %w", err)
 	}
 
