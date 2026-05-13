@@ -93,11 +93,13 @@ func (f *LiveConvoyFetcher) runBdCmd(beadsDir string, args ...string) (*bytes.Bu
 }
 
 func (f *LiveConvoyFetcher) runBdCmdUncached(beadsDir string, args ...string) (*bytes.Buffer, error) {
-	release := f.acquireBdSlot()
-	defer release()
-
 	ctx, cancel := context.WithTimeout(context.Background(), f.cmdTimeout)
 	defer cancel()
+	release, err := f.acquireBdSlot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 
 	bin := f.bdBin
 	if bin == "" {
@@ -108,7 +110,7 @@ func (f *LiveConvoyFetcher) runBdCmdUncached(beadsDir string, args ...string) (*
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			return nil, fmt.Errorf("bd timed out after %v", f.cmdTimeout)
@@ -190,12 +192,16 @@ func (f *LiveConvoyFetcher) finishBdCmd(key string, call *bdCmdInflight, stdout 
 	f.bdCacheMu.Unlock()
 }
 
-func (f *LiveConvoyFetcher) acquireBdSlot() func() {
+func (f *LiveConvoyFetcher) acquireBdSlot(ctx context.Context) (func(), error) {
 	if f.bdConcurrency == nil || cap(f.bdConcurrency) == 0 {
-		return func() {}
+		return func() {}, nil
 	}
-	f.bdConcurrency <- struct{}{}
-	return func() { <-f.bdConcurrency }
+	select {
+	case f.bdConcurrency <- struct{}{}:
+		return func() { <-f.bdConcurrency }, nil
+	case <-ctx.Done():
+		return nil, fmt.Errorf("bd timed out after %v", f.cmdTimeout)
+	}
 }
 
 func copyBytes(in []byte) []byte {
