@@ -1512,6 +1512,9 @@ func ensureGitHubPRForDone(ctx context.Context, cwd string, g *git.Git, branch, 
 		return "", fmt.Errorf("checking existing GitHub PR for %s: %w", branch, err)
 	}
 	if prNumber != 0 {
+		if err := updateGitHubPRBase(ctx, cwd, prNumber, target); err != nil {
+			return "", err
+		}
 		return githubPRURL(ctx, cwd, prNumber)
 	}
 
@@ -1531,6 +1534,14 @@ func ensureGitHubPRForDone(ctx context.Context, cwd string, g *git.Git, branch, 
 		return "", err
 	}
 	return out, nil
+}
+
+func updateGitHubPRBase(ctx context.Context, cwd string, prNumber int, target string) error {
+	_, err := runDoneGH(ctx, cwd, "pr", "edit", strconv.Itoa(prNumber), "--base", target)
+	if err != nil {
+		return fmt.Errorf("updating GitHub PR #%d base to %s: %w", prNumber, target, err)
+	}
+	return nil
 }
 
 func githubPRURL(ctx context.Context, cwd string, prNumber int) (string, error) {
