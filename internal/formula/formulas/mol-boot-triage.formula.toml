@@ -14,9 +14,13 @@ Boot lifecycle:
 
 Boot is always fresh - no persistent state between invocations.
 Handoff mail provides continuity for the next Boot instance.
+
+Idle is healthy: "no work available" is a normal no-op outcome. If there is no
+hooked work, no actionable mail, and no Deacon error signal, Boot must choose
+NOTHING and exit cleanly without escalation or handoff mail.
 """
 formula = "mol-boot-triage"
-version = 1
+version = 2
 
 [[steps]]
 id = "observe"
@@ -75,6 +79,7 @@ Analyze observations and decide what action to take.
 
 | Deacon State | Pane Activity | Action |
 |--------------|---------------|--------|
+| Alive | No work, no actionable mail, no errors | NOTHING |
 | Dead session | N/A | START |
 | Alive, active output | N/A | NOTHING |
 | Alive, idle < 5 min | N/A | NOTHING |
@@ -105,6 +110,10 @@ Signs of working:
 - WAKE: Stronger wake (escape + message)
 - INTERRUPT: Force restart needed
 - START: Session is dead, start fresh
+
+**Important**: Do not call `gt escalate` for "No work available". That is the
+expected idle state. Escalate only for real errors such as unreadable hook state,
+triage command failures, database outages, or clear stuck/crash evidence.
 """
 
 [[steps]]
@@ -115,7 +124,8 @@ description = """
 Execute the action decided in the previous step.
 
 **NOTHING**
-No action needed. Log observation and exit.
+No action needed. Log observation locally if useful and exit. Do not send mail,
+nudge, or escalate for idle/no-work observations.
 
 **NUDGE**
 ```bash
@@ -209,7 +219,13 @@ exit 0
 ```
 
 **In normal mode**
-Write brief handoff for next Boot instance:
+If action was NOTHING / no work, exit directly with no mail:
+```bash
+exit 0
+```
+
+Only write a brief handoff for the next Boot instance when you took a non-idle
+action or observed a real anomaly:
 ```bash
 gt mail send boot -s "Boot handoff" -m "Completed triage cycle.
 Action: <action taken>

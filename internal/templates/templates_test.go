@@ -538,6 +538,39 @@ func TestRoleNames(t *testing.T) {
 	}
 }
 
+func TestRenderRole_BootNoWorkExitsSilently(t *testing.T) {
+	tmpl, err := New()
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	data := RoleData{
+		Role:          "boot",
+		TownRoot:      "/test/town",
+		TownName:      "town",
+		WorkDir:       "/test/town/deacon/dogs/boot",
+		DefaultBranch: "main",
+		MayorSession:  "gt-town-mayor",
+		DeaconSession: "gt-town-deacon",
+	}
+
+	output, err := tmpl.RenderRole("boot", data)
+	if err != nil {
+		t.Fatalf("RenderRole() error = %v", err)
+	}
+
+	for _, want := range []string{
+		"No work available",
+		"normal idle state, not a failure",
+		"Do **not** escalate",
+		"Never escalate merely because there is no work available",
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("boot role template missing %q", want)
+		}
+	}
+}
+
 func TestCreatePolecatCLAUDEmd(t *testing.T) {
 	dir := t.TempDir()
 

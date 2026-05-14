@@ -584,7 +584,8 @@ func outputStartupDirective(ctx RoleContext) {
 		fmt.Println("**STARTUP PROTOCOL**: You are Boot. Please:")
 		fmt.Println("1. Run `" + cli.Name() + " prime` (loads full context)")
 		fmt.Println("2. Run `" + cli.Name() + " boot triage` immediately")
-		fmt.Println("3. When triage completes, exit cleanly")
+		fmt.Println("3. If triage finds no work, exit cleanly with no escalation or handoff mail")
+		fmt.Println("4. Only escalate real errors (unreadable state, command failures, database outages)")
 	}
 }
 
